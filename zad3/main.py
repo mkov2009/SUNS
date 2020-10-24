@@ -4,52 +4,57 @@ import tensorflow.keras as kr
 import matplotlib.pyplot as plt
 import seaborn as sns
 import tensorflow as tf
+from sklearn.svm import SVC
 
 
-def data_clear(df):
-    df = df.dropna(how="any", axis=0)
-    df = df.drop(columns=['track.id', 'track.name', 'track.artist', 'track.popularity', 'track.album.id',
-                          'track.album.name', 'track.album.release_date', 'playlist_name', 'playlist_id',
-                          'playlist_subgenre'])
-    df['playlist_genre'] = df['playlist_genre'].map({'edm': 0, 'latin': 1, 'pop': 2, 'r&b': 3, 'rap': 4, 'rock': 5})
-    df['key'] = df['key'] / 11
+def data_clear(data):
+    data = data.dropna(how="any", axis=0)
+    data = data.drop(columns=['track.id', 'track.name', 'track.artist', 'track.popularity', 'track.album.id',
+                              'track.album.name', 'track.album.release_date', 'playlist_name', 'playlist_id',
+                              'playlist_subgenre'])
+
+    data['playlist_genre'] = data['playlist_genre'].map({'edm': 0, 'latin': 1, 'pop': 2, 'r&b': 3, 'rap': 4, 'rock': 5})
 
     # Data normalization to values 0-1
-    df['duration_ms'] = (df['duration_ms'] - df['duration_ms'].min()) / (df['duration_ms'].max() - df['duration_ms'].min())
-    df['loudness'] = (df['loudness'] - df['loudness'].min()) / (df['loudness'].max() - df['loudness'].min())
-    df['tempo'] = (df['tempo'] - df['tempo'].min()) / (df['tempo'].max() - df['tempo'].min())
+    data['key'] = data['key'] / 11
+    data['duration_ms'] = (data['duration_ms'] - data['duration_ms'].min()) / (
+            data['duration_ms'].max() - data['duration_ms'].min())
+    data['loudness'] = (data['loudness'] - data['loudness'].min()) / (data['loudness'].max() - data['loudness'].min())
+    data['tempo'] = (data['tempo'] - data['tempo'].min()) / (data['tempo'].max() - data['tempo'].min())
+    return data
 
-    return df
+
+def delete_outliers(data):
+    data.drop(data[data.tempo > 220].index, inplace=True)
+    data.drop(data[data.tempo < 50].index, inplace=True)
+    data.drop(data[data.key < 0.3].index, inplace=True)
+    data.drop(data[data.loudness < -30].index, inplace=True)
+    data.drop(data[data.speechiness > 0.8].index, inplace=True)
+    data.drop(data[data.duration_ms > 1000000].index, inplace=True)
+
+    return data
 
 
-if __name__ == '__main__':
-    data_test = pd.read_csv("test.csv")
-    data_train = pd.read_csv("train.csv")
+def nn(df_train, df_test):
 
-    data_train = data_clear(data_train)
-    test_df = data_clear(data_test)
-
-    corr_matrix = data_train.corr()
-    plt.figure(figsize=(10, 10))
-    sns.heatmap(corr_matrix, vmax=1, square=True, annot=True, cmap='cubehelix')
-    plt.show()
-
-    train, validate = np.split(data_train.sample(frac=1), [int(.8 * len(data_train))])
+    train, validate = np.split(df_train.sample(frac=1), [int(.8 * len(df_train))])
 
     train_y = pd.get_dummies(train['playlist_genre'])
     train_x = train.drop(columns='playlist_genre')
     val_y = pd.get_dummies(validate['playlist_genre'])
     val_x = validate.drop(columns='playlist_genre')
-    test_y = test_df['playlist_genre']
-    test_x = test_df.drop(columns='playlist_genre')
+    test_y = df_test['playlist_genre']
+    test_x = df_test.drop(columns='playlist_genre')
 
     model = kr.Sequential()
-    model.add(kr.layers.Dense(150, input_dim=12, activation="sigmoid"))
-    model.add(kr.layers.Dense(50, activation="sigmoid"))
-    model.add(kr.layers.Dense(6, activation="sigmoid"))
+    model.add(kr.layers.Dense(100, input_dim=12, activation="sigmoid"))
 
+    model.add(kr.layers.Dense(50, activation="sigmoid", kernel_regularizer=kr.regularizers.L2(0.01)))
+    # model.add(kr.layers.Dense(50, activation="sigmoid"))
+
+    model.add(kr.layers.Dense(6, activation="sigmoid"))
     model.summary()
-    optimizer = kr.optimizers.Adam(learning_rate=0.001)
+    optimizer = kr.optimizers.Adam(learning_rate=0.01)
 
     model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
     early_stop = kr.callbacks.EarlyStopping(monitor='val_loss', patience=50)
@@ -68,7 +73,7 @@ if __name__ == '__main__':
     # Summarize history for accuracy
     plt.plot(training.history['accuracy'])
     plt.plot(training.history['val_accuracy'])
-    plt.title('model accuracy')
+    plt.title('Model accuracy')
     plt.ylabel('accuracy')
     plt.xlabel('epoch')
     plt.legend(['train', 'validation'], loc='upper left')
@@ -77,10 +82,60 @@ if __name__ == '__main__':
     # Summarize history for loss
     plt.plot(training.history['loss'])
     plt.plot(training.history['val_loss'])
-    plt.title('model loss')
+    plt.title('Model loss')
     plt.ylabel('loss')
     plt.xlabel('epoch')
     plt.legend(['train', 'validation'], loc='upper left')
     plt.show()
 
-    print("Done.")
+
+def svm(train_df, test_df):
+
+    train = train_df
+    train_y = train['playlist_genre']
+    train_x = train.drop(columns='playlist_genre')
+
+    test_y = test_df['playlist_genre']
+    test_x = test_df.drop(columns='playlist_genre')
+
+    svclassifier = SVC(kernel='poly', degree=6)
+    svclassifier.fit(train_x, train_y)
+
+    y_pred = svclassifier.predict(test_x)
+    from sklearn.metrics import classification_report, confusion_matrix
+    print(confusion_matrix(train_y, y_pred))
+    print(classification_report(test_y, y_pred))
+
+    from sklearn.model_selection import StratifiedShuffleSplit, GridSearchCV
+
+    C_range = np.logspace(-2, 10, 6)
+
+    param_grid = dict(C=C_range)
+
+    from sklearn.linear_model import LogisticRegression
+    lr = LogisticRegression()
+    print(lr.get_params().keys())
+
+    grid = GridSearchCV(SVC(verbose=1), param_grid=param_grid, verbose=1)
+    grid.fit(train_x, train_y.values.ravel())
+    scores = grid.cv_results_['mean_test_score'].reshape(len(C_range))
+    print("Scores: ", scores)
+    print("The best parameters are %s with a score of %0.2f" % (grid.best_params_, grid.best_score_))
+
+
+if __name__ == '__main__':
+    data_test = pd.read_csv("test.csv")
+    data_train = pd.read_csv("train.csv")
+
+    data_train = delete_outliers(data_train)
+    data_train = data_clear(data_train)
+
+    data_test = data_clear(data_test)
+
+    corr_matrix = data_train.corr()
+    plt.figure(figsize=(10, 10))
+    sns.heatmap(corr_matrix, vmax=1, square=True, annot=True, cmap='cubehelix')
+    # plt.show()
+
+    # nn(data_train, data_test)
+    svm(data_train.head(2000), data_test.head(2000))
