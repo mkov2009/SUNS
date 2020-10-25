@@ -47,17 +47,37 @@ def nn(df_train, df_test):
     test_x = df_test.drop(columns='playlist_genre')
 
     model = kr.Sequential()
-    model.add(kr.layers.Dense(100, input_dim=12, activation="sigmoid"))
 
-    model.add(kr.layers.Dense(50, activation="sigmoid", kernel_regularizer=kr.regularizers.L2(0.01)))
+    # Neural network
+    # model.add(kr.layers.Dense(20, input_dim=12, activation="sigmoid"))
+    # model.add(kr.layers.Dense(10, activation="sigmoid"))
+    # model.add(kr.layers.Dense(6, activation="sigmoid"))
+    # model.summary()
+
+    # L2 Regulalizer
+    # model.add(kr.layers.Dense(100, input_dim=12, activation="sigmoid"))
+    # model.add(kr.layers.Dense(50, activation="sigmoid", kernel_regularizer=kr.regularizers.L2(0.01)))
+    # model.add(kr.layers.Dense(6, activation="sigmoid"))
+    # model.summary()
+
+    # DROPOUT
+    # model.add(kr.layers.Dense(100, input_dim=12, activation="sigmoid"))
+    # model.add(kr.layers.Dropout(0.2))
     # model.add(kr.layers.Dense(50, activation="sigmoid"))
+    # model.add(kr.layers.Dropout(0.2))
+    # model.add(kr.layers.Dense(6, activation="sigmoid"))
+    # model.summary()
 
-    model.add(kr.layers.Dense(6, activation="sigmoid"))
-    model.summary()
+    # Batch normalization
+    # model.add(kr.layers.Dense(30, input_dim=12, activation="sigmoid"))
+    # model.add(kr.layers.Dense(10, activation="sigmoid"))
+    # model.add(kr.layers.Dense(6, activation="sigmoid"))
+    # model.summary()
+
     optimizer = kr.optimizers.Adam(learning_rate=0.01)
 
     model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
-    early_stop = kr.callbacks.EarlyStopping(monitor='val_loss', patience=50)
+    early_stop = kr.callbacks.EarlyStopping(monitor='val_loss', patience=20)
     training = model.fit(train_x, train_y, epochs=1000, validation_data=(val_x, val_y), callbacks=[early_stop])
 
     predicted = np.argmax(model.predict(test_x), axis=1)
@@ -98,29 +118,26 @@ def svm(train_df, test_df):
     test_y = test_df['playlist_genre']
     test_x = test_df.drop(columns='playlist_genre')
 
-    svclassifier = SVC(kernel='poly', degree=6)
-    svclassifier.fit(train_x, train_y)
-
-    y_pred = svclassifier.predict(test_x)
-    from sklearn.metrics import classification_report, confusion_matrix
-    print(confusion_matrix(train_y, y_pred))
-    print(classification_report(test_y, y_pred))
-
     from sklearn.model_selection import StratifiedShuffleSplit, GridSearchCV
 
     C_range = np.logspace(-2, 10, 6)
 
     param_grid = dict(C=C_range)
 
-    from sklearn.linear_model import LogisticRegression
-    lr = LogisticRegression()
-    print(lr.get_params().keys())
+    # from sklearn.linear_model import LogisticRegression
+    # lr = LogisticRegression()
+    # print(lr.get_params().keys())
 
-    grid = GridSearchCV(SVC(verbose=1), param_grid=param_grid, verbose=1)
-    grid.fit(train_x, train_y.values.ravel())
-    scores = grid.cv_results_['mean_test_score'].reshape(len(C_range))
-    print("Scores: ", scores)
-    print("The best parameters are %s with a score of %0.2f" % (grid.best_params_, grid.best_score_))
+    # grid = GridSearchCV(SVC(verbose=1,), param_grid=param_grid, verbose=1)
+    # grid.fit(train_x, train_y.values.ravel())
+    # scores = grid.cv_results_['mean_test_score'].reshape(len(C_range))
+    # print("Scores: ", scores)
+    # print("The best parameters are %s with a score of %0.2f" % (grid.best_params_, grid.best_score_))
+
+    svc = SVC(C=2.5118864315095797)
+    svc.fit(train_x, train_y.values.ravel())
+    score = svc.score(test_x, test_y)
+    print("Scores: ", score)
 
 
 if __name__ == '__main__':
@@ -137,5 +154,5 @@ if __name__ == '__main__':
     sns.heatmap(corr_matrix, vmax=1, square=True, annot=True, cmap='cubehelix')
     # plt.show()
 
-    # nn(data_train, data_test)
-    svm(data_train.head(2000), data_test.head(2000))
+    nn(data_train, data_test)
+    # svm(data_train, data_test)
