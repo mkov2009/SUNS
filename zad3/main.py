@@ -25,12 +25,12 @@ def data_clear(data):
 
 
 def delete_outliers(data):
-    data.drop(data[data.tempo > 220].index, inplace=True)
-    data.drop(data[data.tempo < 50].index, inplace=True)
-    data.drop(data[data.key < 0.3].index, inplace=True)
     data.drop(data[data.loudness < -30].index, inplace=True)
+    data.drop(data[data.tempo < 50].index, inplace=True)
     data.drop(data[data.speechiness > 0.8].index, inplace=True)
     data.drop(data[data.duration_ms > 1000000].index, inplace=True)
+    data.drop(data[data.tempo > 220].index, inplace=True)
+    data.drop(data[data.key < 0.3].index, inplace=True)
 
     return data
 
@@ -49,12 +49,12 @@ def nn(df_train, df_test):
     model = kr.Sequential()
 
     # Neural network
-    # model.add(kr.layers.Dense(20, input_dim=12, activation="sigmoid"))
-    # model.add(kr.layers.Dense(10, activation="sigmoid"))
-    # model.add(kr.layers.Dense(6, activation="sigmoid"))
-    # model.summary()
+    model.add(kr.layers.Dense(20, input_dim=12, activation="sigmoid"))
+    model.add(kr.layers.Dense(20, activation="sigmoid"))
+    model.add(kr.layers.Dense(6, activation="sigmoid"))
+    model.summary()
 
-    # L2 Regulalizer
+    # L2 Regulation
     # model.add(kr.layers.Dense(100, input_dim=12, activation="sigmoid"))
     # model.add(kr.layers.Dense(50, activation="sigmoid", kernel_regularizer=kr.regularizers.L2(0.01)))
     # model.add(kr.layers.Dense(6, activation="sigmoid"))
@@ -62,22 +62,24 @@ def nn(df_train, df_test):
 
     # DROPOUT
     # model.add(kr.layers.Dense(100, input_dim=12, activation="sigmoid"))
-    # model.add(kr.layers.Dropout(0.2))
+    # model.add(kr.layers.Dropout(0.15))
     # model.add(kr.layers.Dense(50, activation="sigmoid"))
-    # model.add(kr.layers.Dropout(0.2))
+    # model.add(kr.layers.Dropout(0.15))
     # model.add(kr.layers.Dense(6, activation="sigmoid"))
     # model.summary()
 
     # Batch normalization
-    # model.add(kr.layers.Dense(30, input_dim=12, activation="sigmoid"))
-    # model.add(kr.layers.Dense(10, activation="sigmoid"))
+    # model.add(kr.layers.Dense(100, input_dim=12, activation="sigmoid"))
+    # model.add(kr.layers.BatchNormalization())
+    # model.add(kr.layers.Dense(50, activation="sigmoid"))
+    # model.add(kr.layers.BatchNormalization())
     # model.add(kr.layers.Dense(6, activation="sigmoid"))
     # model.summary()
 
     optimizer = kr.optimizers.Adam(learning_rate=0.01)
 
     model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
-    early_stop = kr.callbacks.EarlyStopping(monitor='val_loss', patience=20)
+    early_stop = kr.callbacks.EarlyStopping(monitor='val_loss', patience=50)
     training = model.fit(train_x, train_y, epochs=1000, validation_data=(val_x, val_y), callbacks=[early_stop])
 
     predicted = np.argmax(model.predict(test_x), axis=1)
