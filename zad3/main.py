@@ -1,5 +1,8 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import sklearn
+import sklearn.tree as tree
+import seaborn as sns
 
 
 def data_clear(data):
@@ -8,7 +11,7 @@ def data_clear(data):
 
     data = data.drop(columns=['fiberid', 'mjd'])
 
-    data['class'] = data['class'].map({'STAR': 1, 'GALAXY': 2, 'QSO': 3})
+    data['class'] = data['class'].map({'STAR': 0, 'GALAXY': 1, 'QSO': 2})
 
     return data
 
@@ -55,6 +58,32 @@ def plot_graphs(df):
     plt.show()
 
 
+def tree_classifier(train, test):
+    train = train.drop(columns=['x_coord', 'y_coord', 'z_coord'])
+    test = test.drop(columns=['x_coord', 'y_coord', 'z_coord'])
+
+    train_y = pd.get_dummies(train['class'])
+    train_x = train.drop(columns='class')
+
+    test_y = test['class']
+    test_x = test.drop(columns='class')
+
+    clf = tree.DecisionTreeClassifier(min_samples_leaf=10)
+    clf.fit(train_x, train_y)
+    pred_y = clf.predict(test_x)
+    score = clf.score(train_x, train_y)
+
+    print("Model score: ", score)
+
+    # Confusion matrix
+    conf_m = sklearn.metrics.confusion_matrix(test_y, pred_y)
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(conf_m, annot=True, fmt='g')
+    plt.xlabel('Prediction')
+    plt.ylabel('Label')
+    plt.show()
+
+
 if __name__ == '__main__':
     data_test = pd.read_csv("test.csv")
     data_train = pd.read_csv("train.csv")
@@ -62,3 +91,4 @@ if __name__ == '__main__':
     data_test = data_clear(data_test)
     data_train = data_clear(data_train)
     # plot_graphs(data_train)
+    tree_classifier(data_train, data_test)
