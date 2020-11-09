@@ -1,15 +1,21 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-import sklearn
 import sklearn.tree as tree
 import seaborn as sns
+import numpy as np
+from imblearn.under_sampling import RandomUnderSampler
+from sklearn.ensemble import RandomForestClassifier
+from os import system
+import tensorflow as tf
+import tensorflow.keras as kr
+from sklearn.ensemble import RandomForestRegressor
+from sklearn import metrics
+from sklearn.neighbors import KNeighborsRegressor
 
 
 def data_clear(data):
     data = data.dropna(how="any", axis=0)
-    data = data.drop(columns=['objid', 'rerun', 'specobjid'])
-
-    data = data.drop(columns=['fiberid', 'mjd'])
+    data = data.drop(columns=['objid', 'rerun', 'specobjid', 'fiberid', 'mjd', 'run'])
 
     data['class'] = data['class'].map({'STAR': 0, 'GALAXY': 1, 'QSO': 2})
 
@@ -31,9 +37,6 @@ def plot_graphs(df):
     plt.show()
     plt.plot(df['z'])
     plt.title('z')
-    plt.show()
-    plt.plot(df['run'])
-    plt.title('run')
     plt.show()
     plt.plot(df['camcol'])
     plt.title('camcol')
@@ -58,9 +61,22 @@ def plot_graphs(df):
     plt.show()
 
 
+def plot_confusion_matrix(test_y, pred_y):
+    conf_m = tf.math.confusion_matrix(test_y, pred_y)
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(conf_m, annot=True, fmt='g')
+    plt.xlabel('Prediction')
+    plt.ylabel('Label')
+    plt.show()
+
+
+def print_errors(test_y, y_pred):
+    print('Mean Absolute Error:', metrics.mean_absolute_error(test_y, y_pred))
+    print('Mean Squared Error:', metrics.mean_squared_error(test_y, y_pred))
+    print('Root Mean Squared Error:', np.sqrt(metrics.mean_squared_error(test_y, y_pred)))
+
+
 def tree_classifier(train, test):
-    train = train.drop(columns=['x_coord', 'y_coord', 'z_coord'])
-    test = test.drop(columns=['x_coord', 'y_coord', 'z_coord'])
 
     train_y = pd.get_dummies(train['class'])
     train_x = train.drop(columns='class')
@@ -68,20 +84,118 @@ def tree_classifier(train, test):
     test_y = test['class']
     test_x = test.drop(columns='class')
 
-    clf = tree.DecisionTreeClassifier(min_samples_leaf=10)
+    clf = tree.DecisionTreeClassifier(min_samples_leaf=8)
     clf.fit(train_x, train_y)
-    pred_y = clf.predict(test_x)
-    score = clf.score(train_x, train_y)
-
+    pred_y = np.argmax(clf.predict(test_x), axis=1)
+    score = clf.score(test_x, test_y)
     print("Model score: ", score)
 
+    # Tree visualization
+    dotfile = open("D:/SUNS/Z3/dtree1.dot", 'w')
+    tree.export_graphviz(clf, out_file=dotfile, feature_names=train_x.columns)
+    dotfile.close()
+    system("dot -Tpng D:/SUNS/Z3/dtree1.dot -o D:/SUNS/Z3/dtree1.png")
+
     # Confusion matrix
-    conf_m = sklearn.metrics.confusion_matrix(test_y, pred_y)
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(conf_m, annot=True, fmt='g')
-    plt.xlabel('Prediction')
-    plt.ylabel('Label')
+    plot_confusion_matrix(test_y, pred_y)
+
+
+def forest_classifier(train, test):
+    train_y = train['class']
+    train_x = train.drop(columns='class')
+
+    test_y = test['class']
+    test_x = test.drop(columns='class')
+
+    sampler = RandomUnderSampler(random_state=42)
+    train_x, train_y = sampler.fit_sample(train_x, train_y)
+
+    forest_clf = RandomForestClassifier(max_depth=10, random_state=42, n_estimators=1)
+    forest_clf.fit(train_x, train_y)
+
+    pred_y = forest_clf.predict(test_x)
+    plot_confusion_matrix(test_y, pred_y)
+
+
+def nn(df_train, df_test):
+
+    train, validate = np.split(df_train.sample(frac=1), [int(.8 * len(df_train))])
+
+    train_y = pd.get_dummies(train['class'])
+    train_x = train.drop(columns='class')
+
+    val_y = pd.get_dummies(validate['class'])
+    val_x = validate.drop(columns='class')
+
+    test_y = df_test['class']
+    test_x = df_test.drop(columns='class')
+
+    model = kr.Sequential()
+
+    # Neural network
+    model.add(kr.layers.Dense(100, input_dim=11, activation="sigmoid"))
+    model.add(kr.layers.Dense(50, activation="sigmoid"))
+    model.add(kr.layers.Dense(3, activation="sigmoid"))
+    model.summary()
+
+    optimizer = kr.optimizers.Adam(learning_rate=0.01)
+
+    model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=['accuracy'])
+    early_stop = kr.callbacks.EarlyStopping(monitor='val_loss', patience=50)
+    training = model.fit(train_x, train_y, epochs=1000, validation_data=(val_x, val_y), callbacks=[early_stop])
+
+    predicted = np.argmax(model.predict(test_x), axis=1)
+
+    # Confusion matrix
+    plot_confusion_matrix(test_y, predicted)
+
+    # Summarize history for accuracy
+    plt.plot(training.history['accuracy'])
+    plt.plot(training.history['val_accuracy'])
+    plt.title('Model accuracy')
+    plt.ylabel('accuracy')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'validation'], loc='upper left')
     plt.show()
+
+    # Summarize history for loss
+    plt.plot(training.history['loss'])
+    plt.plot(training.history['val_loss'])
+    plt.title('Model loss')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'validation'], loc='upper left')
+    plt.show()
+
+
+def forest_regression(train, test):
+    train_y = train[['x_coord', 'y_coord', 'z_coord']]
+    train_x = train.drop(columns=['x_coord', 'y_coord', 'z_coord'])
+
+    test_y = test[['x_coord', 'y_coord', 'z_coord']]
+    test_x = test.drop(columns=['x_coord', 'y_coord', 'z_coord'])
+
+    regr = RandomForestRegressor(n_estimators=20, random_state=0)
+    regr.fit(train_x, train_y)
+    y_pred = regr.predict(test_x)
+
+    print("Score: ", regr.score(test_x, test_y))
+    print_errors(test_y, y_pred)
+
+
+def neighbours_regression(train, test):
+    train_y = train[['x_coord', 'y_coord', 'z_coord']]
+    train_x = train.drop(columns=['x_coord', 'y_coord', 'z_coord'])
+
+    test_y = test[['x_coord', 'y_coord', 'z_coord']]
+    test_x = test.drop(columns=['x_coord', 'y_coord', 'z_coord'])
+
+    regr = KNeighborsRegressor()
+    regr.fit(train_x, train_y)
+    y_pred = regr.predict(test_x)
+
+    print("Score: ", regr.score(test_x, test_y))
+    print_errors(test_y, y_pred)
 
 
 if __name__ == '__main__':
@@ -91,4 +205,7 @@ if __name__ == '__main__':
     data_test = data_clear(data_test)
     data_train = data_clear(data_train)
     # plot_graphs(data_train)
-    tree_classifier(data_train, data_test)
+    # tree_classifier(data_train, data_test)
+    # nn(data_train, data_test)
+    # forest_regression(data_train, data_test)
+    neighbours_regression(data_train, data_test)
