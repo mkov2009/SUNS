@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import sklearn.tree as tree
 import seaborn as sns
 import numpy as np
-from imblearn.under_sampling import RandomUnderSampler
 from sklearn.ensemble import RandomForestClassifier, StackingClassifier
 from os import system
 import tensorflow as tf
@@ -80,6 +79,13 @@ def print_errors(test_y, y_pred):
     print('Root Mean Squared Error:', np.sqrt(metrics.mean_squared_error(test_y, y_pred)))
 
 
+def create_tree_image(model, train_x, name):
+    dotfile = open("D:/SUNS/Z3/" + name + ".dot", 'w')
+    tree.export_graphviz(model, out_file=dotfile, feature_names=train_x.columns)
+    dotfile.close()
+    system("dot -Tpng D:/SUNS/Z3/" + name + ".dot -o D:/SUNS/Z3/" + name + ".png")
+
+
 def tree_classifier(train, test):
 
     train_y = pd.get_dummies(train['class'])
@@ -95,10 +101,7 @@ def tree_classifier(train, test):
     print("Model score: ", score)
 
     # Tree visualization
-    dotfile = open("D:/SUNS/Z3/dtree1.dot", 'w')
-    tree.export_graphviz(clf, out_file=dotfile, feature_names=train_x.columns)
-    dotfile.close()
-    system("dot -Tpng D:/SUNS/Z3/dtree1.dot -o D:/SUNS/Z3/dtree1.png")
+    create_tree_image(clf, train_x)
 
     # Confusion matrix
     plot_confusion_matrix(test_y, pred_y)
@@ -111,14 +114,17 @@ def forest_classifier(train, test):
     test_y = test['class']
     test_x = test.drop(columns='class')
 
-    sampler = RandomUnderSampler(random_state=42)
-    train_x, train_y = sampler.fit_sample(train_x, train_y)
-
-    forest_clf = RandomForestClassifier(max_depth=10, random_state=42, n_estimators=1)
+    forest_clf = RandomForestClassifier(max_depth=10, random_state=16)
     forest_clf.fit(train_x, train_y)
+
+    print("Score: ", forest_clf.score(test_x, test_y))
 
     pred_y = forest_clf.predict(test_x)
     plot_confusion_matrix(test_y, pred_y)
+
+    one_tree = forest_clf.estimators_[0]
+
+    create_tree_image(one_tree, train_x, "one_tree")
 
 
 def nn(df_train, df_test):
@@ -179,7 +185,7 @@ def forest_regression(train, test):
     test_y = test[['x_coord', 'y_coord', 'z_coord']]
     test_x = test.drop(columns=['x_coord', 'y_coord', 'z_coord'])
 
-    regr = RandomForestRegressor(n_estimators=20, random_state=0)
+    regr = RandomForestRegressor(n_estimators=100, random_state=16)
     regr.fit(train_x, train_y)
     y_pred = regr.predict(test_x)
 
@@ -194,7 +200,7 @@ def neighbors_regression(train, test):
     test_y = test[['x_coord', 'y_coord', 'z_coord']]
     test_x = test.drop(columns=['x_coord', 'y_coord', 'z_coord'])
 
-    regr = KNeighborsRegressor()
+    regr = KNeighborsRegressor(n_neighbors=8)
     regr.fit(train_x, train_y)
     y_pred = regr.predict(test_x)
 
@@ -209,7 +215,7 @@ def stacking_classifier(train, test):
     test_y = test['class']
     test_x = test.drop(columns='class')
 
-    estimators = [('rf', RandomForestClassifier(n_estimators=10, random_state=42)),
+    estimators = [('rf', RandomForestClassifier(n_estimators=100, random_state=42)),
                   ('svr', make_pipeline(StandardScaler(), LinearSVC(random_state=42)))]
     clf = StackingClassifier(estimators=estimators, final_estimator=LogisticRegression())
     clf.fit(train_x, train_y)
@@ -227,6 +233,7 @@ if __name__ == '__main__':
     data_train = data_clear(data_train)
     # plot_graphs(data_train)
     # tree_classifier(data_train, data_test)
+    # forest_classifier(data_train, data_test)
     # nn(data_train, data_test)
     # forest_regression(data_train, data_test)
     # neighbors_regression(data_train, data_test)
