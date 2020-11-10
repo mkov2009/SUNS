@@ -4,13 +4,17 @@ import sklearn.tree as tree
 import seaborn as sns
 import numpy as np
 from imblearn.under_sampling import RandomUnderSampler
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, StackingClassifier
 from os import system
 import tensorflow as tf
 import tensorflow.keras as kr
 from sklearn.ensemble import RandomForestRegressor
 from sklearn import metrics
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import LinearSVC
+from sklearn.linear_model import LogisticRegression
 
 
 def data_clear(data):
@@ -183,7 +187,7 @@ def forest_regression(train, test):
     print_errors(test_y, y_pred)
 
 
-def neighbours_regression(train, test):
+def neighbors_regression(train, test):
     train_y = train[['x_coord', 'y_coord', 'z_coord']]
     train_x = train.drop(columns=['x_coord', 'y_coord', 'z_coord'])
 
@@ -198,6 +202,23 @@ def neighbours_regression(train, test):
     print_errors(test_y, y_pred)
 
 
+def stacking_classifier(train, test):
+    train_y = train['class']
+    train_x = train.drop(columns='class')
+
+    test_y = test['class']
+    test_x = test.drop(columns='class')
+
+    estimators = [('rf', RandomForestClassifier(n_estimators=10, random_state=42)),
+                  ('svr', make_pipeline(StandardScaler(), LinearSVC(random_state=42)))]
+    clf = StackingClassifier(estimators=estimators, final_estimator=LogisticRegression())
+    clf.fit(train_x, train_y)
+    y_pred = clf.predict(test_x)
+
+    print("Score: ", clf.score(test_x, test_y))
+    plot_confusion_matrix(test_y, y_pred)
+
+
 if __name__ == '__main__':
     data_test = pd.read_csv("test.csv")
     data_train = pd.read_csv("train.csv")
@@ -208,4 +229,5 @@ if __name__ == '__main__':
     # tree_classifier(data_train, data_test)
     # nn(data_train, data_test)
     # forest_regression(data_train, data_test)
-    neighbours_regression(data_train, data_test)
+    # neighbors_regression(data_train, data_test)
+    stacking_classifier(data_train, data_test)
